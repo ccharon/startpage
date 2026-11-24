@@ -1,0 +1,12 @@
+[Unit]
+Description=Local bookmark start page
+Documentation=https://github.com/ccharon/startpage
+
+[Service]
+ExecStart=@BINDIR@/startpage
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

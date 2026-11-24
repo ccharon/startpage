@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Start Page</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<link rel="search" type="application/opensearchdescription+xml" title="Bookmarks" href="/opensearch.xml">
+<script src="/app.js"></script>
+</head>
+<body>
+<header class="front-panel" id="front-panel">
+  <div class="fp-cell fp-clock" aria-hidden="true">
+    <div class="clock-time" id="clock-time">--:--</div>
+    <div class="clock-date" id="clock-date"></div>
+  </div>
+  <div class="fp-cell fp-search">
+    <label for="search" class="fp-label">Search</label>
+    <input id="search" class="field mono" type="text" autofocus autocomplete="off" spellcheck="false"
+           placeholder="Title, URL or tag …  ( / )" role="combobox" aria-autocomplete="list"
+           aria-expanded="false" aria-controls="results">
+    <button type="button" class="btn" id="btn-clear-search" title="Clear search (Esc)" aria-label="Clear search" disabled>✕</button>
+  </div>
+  <div class="fp-cell fp-actions" role="toolbar" aria-label="Actions">
+    <button type="button" class="btn write" id="btn-add-bookmark" title="New bookmark">New</button>
+    <button type="button" class="btn write" id="btn-add-category" title="New category">Category</button>
+    <button type="button" class="btn write" id="btn-edit" aria-pressed="false" title="Toggle edit mode">Edit</button>
+    <button type="button" class="btn write" id="btn-import" title="Import bookmarks (HTML or JSON)">Import</button>
+    <button type="button" class="btn" id="btn-export" title="Export as JSON">Export</button>
+    <button type="button" class="btn" id="btn-theme" title="Switch color scheme">Theme: Auto</button>
+    <button type="button" class="btn" id="btn-options" title="Options (search engine)">Options</button>
+  </div>
+  <div class="fp-cell fp-view" role="group" aria-label="View">
+    <button type="button" class="btn seg" id="btn-view-tiles" aria-pressed="true" title="Show categories as tiles">Tiles</button>
+    <button type="button" class="btn seg" id="btn-view-details" aria-pressed="false" title="Show categories as a detail list">Details</button>
+  </div>
+  <div class="fp-cell fp-font" role="group" aria-label="Font size">
+    <button type="button" class="btn" id="btn-font-dec" title="Smaller font" aria-label="Smaller font">A−</button>
+    <output class="fs-value" id="fs-value" aria-live="polite" title="Font size">12 px</output>
+    <button type="button" class="btn" id="btn-font-inc" title="Larger font" aria-label="Larger font">A+</button>
+    <button type="button" class="btn" id="btn-font-reset" title="Reset font size (12 px)" aria-label="Reset font size">↺</button>
+  </div>
+</header>
+
+<div class="banner" id="banner" role="alert" hidden>
+  <span class="banner-text" id="banner-text">Server not reachable. Read-only view from cache.</span>
+  <button type="button" class="btn" id="btn-retry">Retry</button>
+</div>
+
+<main id="main">
+  <div id="results" class="results" role="listbox" aria-label="Search results" hidden></div>
+  <div id="categories" class="categories">
+    <p class="loading">Loading …</p>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <span class="status-field" id="status-count"></span>
+  <span class="status-field status-grow" id="status-mode"></span>
+  <span class="status-field" id="status-save"></span>
+</footer>
+
+<input type="file" id="file-input" accept=".html,.htm,.json,text/html,application/json" hidden>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

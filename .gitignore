@@ -1,0 +1,11 @@
+# Build output
+/bin/
+
+# Data and backups when started with -data in the source tree
+/bookmarks.json
+/backups/
+
+# IDE
+.idea/
+*.iml
+.vscode/
