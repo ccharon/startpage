@@ -4,6 +4,8 @@ Startpage is a local bookmark start page. A single Go binary serves the page and
 loopback address and stores them in one JSON file. The interface uses a CDE look with the colors of
 the [Schiefer theme](https://github.com/ccharon/kde-schiefer-theme).
 
+![Startpage in tile view with the light theme](docs/screenshot.png)
+
 ## Run
 
 Building requires Go 1.27 or later and `make`. `make install` puts the binary into `~/.local/bin`
