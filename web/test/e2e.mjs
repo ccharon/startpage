@@ -42,7 +42,7 @@ async function waitUntil(fn, ms, what) {
 
 async function startServer() {
   writeFileSync(join(dir, 'bookmarks.json'), JSON.stringify({ version: 1, categories: [{ id: 'c1', name: 'Tools', order: 0, bookmarks: [
-    { id: 'b1', title: 'Jira', url: 'http://127.0.0.1:9/jira', tags: ['ticket'], order: 0 },
+    { id: 'b1', title: 'Jira', url: 'http://127.0.0.1:9/jira', description: 'Team tickets', tags: ['ticket'], order: 0 },
     { id: 'b2', title: 'Wiki', url: 'http://127.0.0.1:9/wiki', tags: [], order: 1 }] }] }));
   const p = spawn(binary, ['-addr', '127.0.0.1:0', '-data', join(dir, 'bookmarks.json')], { stdio: ['ignore', 'ignore', 'pipe'] });
   procs.push(p);
@@ -101,16 +101,41 @@ async function run() {
   await waitFor(`document.querySelector('.tile')`);
   check('page offers the OpenSearch description', await ev(`!!document.querySelector('link[rel=search][href="/opensearch.xml"]')`));
 
+  check('only bookmarks with a description carry the mark',
+    await ev(`!!document.querySelector('.tile[data-bm-id="b1"] .desc-mark') && !document.querySelector('.tile[data-bm-id="b2"] .desc-mark')`));
+  check('tiles without a description show only their title', await ev(`document.querySelector('.tile[data-bm-id="b2"] .tile-link').textContent.trim().endsWith('Wiki')`));
+  check('bookmark links have no native tooltip', await ev(`!document.querySelector('.tile-link[title]')`));
+  const tileCenter = await ev(`(() => { const r = document.querySelector('.tile[data-bm-id="b1"] .tile-title').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+  const hover = ([x, y]) => cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  const tipText = `(() => { const t = document.querySelector('.tooltip'); return t && !t.hidden ? t.textContent : ''; })()`;
+  await hover(tileCenter);
+  await sleep(500);
+  check('the tooltip waits while the pointer rests', (await ev(tipText)) === '');
+  await sleep(900);
+  const shown = await ev(tipText);
+  check('the tooltip shows title, URL and description after the delay', shown.includes('Jira') && shown.includes('/jira') && shown.includes('Team tickets'), shown);
+  await hover([5, 5]);
+  check('the tooltip hides when the pointer leaves', (await ev(tipText)) === '');
+  await ev(`document.querySelector('#btn-edit').click()`);
+  await hover(tileCenter);
+  await sleep(1400);
+  check('edit mode shows no tooltip', (await ev(tipText)) === '');
+  await ev(`document.querySelector('#btn-edit').click()`);
+  await hover([5, 5]);
+
   await open('/?add=' + encodeURIComponent('http://127.0.0.1:9/new') + '&title=' + encodeURIComponent('New Page'));
   await waitFor(`document.querySelector('dialog[open]')`);
   const fields = await ev(`[...document.querySelectorAll('dialog input')].map(i => i.value)`);
   check('?add prefills title and URL', fields[0] === 'New Page' && fields[1] === 'http://127.0.0.1:9/new', JSON.stringify(fields));
   check('?add is removed from the address', await ev(`location.search === ''`));
   check('?add saves nothing before OK', (await bookmarks()).length === 2);
+  await ev(`document.querySelector('dialog textarea').value = '  First line \\n second line '`);
   await clickOk();
   await waitFor(`!document.querySelector('dialog[open]')`);
   await settle();
-  check('?add saves after OK', (await bookmarks()).some(b => b.title === 'New Page'));
+  const added = (await bookmarks()).find(b => b.title === 'New Page');
+  check('?add saves after OK', !!added);
+  check('the dialog saves the trimmed description', added && added.description === 'First line\nsecond line', JSON.stringify(added));
 
   await open('/?add=' + encodeURIComponent('http://127.0.0.1:9/jira/') + '&title=Dup');
   await waitFor(`document.querySelector('dialog[open]')`);
@@ -144,8 +169,8 @@ async function run() {
   check('the visited bookmark ranks first among equal matches', order[0] === 'Wiki', JSON.stringify(order));
 
   const html = join(dir, 'import.html');
-  writeFileSync(html, '<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><H3>Docs</H3><DL><p>' +
-    '<DT><A HREF="http://127.0.0.1:9/manual" TAGS="ref">Manual</A>' +
+  writeFileSync(html, '<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><H3>Docs</H3><DD>Folder note<DL><p>' +
+    '<DT><A HREF="http://127.0.0.1:9/manual" TAGS="ref">Manual</A>\n<DD>How to &amp; why\n' +
     '<DT><A HREF="javascript:alert(1)">Bad</A></DL><p></DL>');
   const doc = await cdp('DOM.getDocument');
   const input = await cdp('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector: '#file-input' });
@@ -157,6 +182,9 @@ async function run() {
   await settle();
   const manual = (await bookmarks()).find(b => b.title === 'Manual');
   check('browser bookmark HTML is imported with tags', !!manual && manual.tags[0] === 'ref', JSON.stringify(manual));
+  check('browser bookmark HTML is imported with descriptions', !!manual && manual.description === 'How to & why', JSON.stringify(manual));
+  const docsCat = (await (await fetch(base + '/api/bookmarks')).json()).categories.find(c => c.bookmarks.some(b => b.title === 'Manual'));
+  check('a folder description keeps the folder name', docsCat && docsCat.name === 'Docs', docsCat && docsCat.name);
 
   navigations.length = 0;
   await open('/?q=jira');

@@ -17,6 +17,7 @@ const (
 	maxNameLen     = 500
 	maxTitleLen    = 500
 	maxURLLen      = 4096
+	maxDescLen     = 2000
 	maxTagLen      = 100
 	maxTagsPerItem = 100
 	maxIDLen       = 200
@@ -38,13 +39,14 @@ type Category struct {
 	Bookmarks []Bookmark `json:"bookmarks"`
 }
 
-// Bookmark is a single link with optional tags.
+// Bookmark is a single link with optional tags and description.
 type Bookmark struct {
-	ID    string   `json:"id"`
-	Title string   `json:"title"`
-	URL   string   `json:"url"`
-	Tags  []string `json:"tags"`
-	Order int      `json:"order"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	URL         string   `json:"url"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags"`
+	Order       int      `json:"order"`
 	// Visits and LastVisit (Unix seconds) rank often used bookmarks higher in the search.
 	Visits    int   `json:"visits,omitempty"`
 	LastVisit int64 `json:"lastVisit,omitempty"`
@@ -127,6 +129,9 @@ func validateData(d *Data) error {
 			}
 			if err := validateURL(b.URL); err != nil {
 				return invalid("bookmark %q: %v", b.ID, err)
+			}
+			if utf8.RuneCountInString(b.Description) > maxDescLen {
+				return invalid("bookmark %q: description too long (max. %d characters)", b.ID, maxDescLen)
 			}
 			if b.Tags == nil {
 				b.Tags = []string{}

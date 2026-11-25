@@ -83,3 +83,43 @@ test('parseOwnJson skips unsafe URLs and applyImport merges without duplicates',
   assert.deepEqual(stats, { added: 0, duplicates: 1, newCategories: 0 });
   assert.throws(() => app.parseOwnJson('{"x":1}'), /categories/);
 });
+
+test('normalizeData keeps a description only when set', () => {
+  const d = app.normalizeData({ version: 1, categories: [{ id: 'c', name: 'n', bookmarks: [
+    bm('a', 'A', 'https://a.org', { description: 'Team board' }), bm('b', 'B', 'https://b.org', { description: 7 })] }] });
+  assert.equal(d.categories[0].bookmarks[0].description, 'Team board');
+  assert.equal('description' in d.categories[0].bookmarks[1], false);
+});
+
+test('search finds description words below title, tag and URL matches', () => {
+  const idx = app.buildIndex(data([{ id: 'c', name: 'n', bookmarks: [
+    bm('1', 'Board', 'https://a.example', { description: 'Sprint planning for the infra team' }),
+    bm('2', 'Infra', 'https://b.example')] }]));
+  const r = app.search(idx, 'infra');
+  assert.deepEqual(r.map(x => x.item.bm.id), ['2', '1']);
+  const only = app.search(idx, 'sprint');
+  assert.equal(only.length, 1);
+  assert.ok(only[0].minTerm < app.STRONG_MATCH && only[0].minTerm > 300);
+  assert.equal(app.search(idx, 'sprnt').length, 0);
+});
+
+test('cleanDescription keeps line breaks and trims whitespace', () => {
+  assert.equal(app.cleanDescription('  one \t two \r\n\r\n\r\n  three  '), 'one two\n\nthree');
+  assert.equal(app.cleanDescription('x'.repeat(2100)).length, 2000);
+  assert.equal(app.cleanDescription(null), '');
+});
+
+test('parseOwnJson and applyImport carry descriptions', () => {
+  const imported = app.parseOwnJson(JSON.stringify({ categories: [{ name: 'Tools', bookmarks: [
+    { title: 'Jira', url: 'https://jira.example', description: ' Tickets ' }, { title: 'Wiki', url: 'https://wiki.example' }] }] }));
+  const d = data([]);
+  app.applyImport(d, imported, 'merge');
+  assert.equal(d.categories[0].bookmarks[0].description, 'Tickets');
+  assert.equal('description' in d.categories[0].bookmarks[1], false);
+});
+
+test('tipPosition flips above the pointer and stays inside the viewport', () => {
+  assert.deepEqual(app.tipPosition(100, 100, 200, 50, 1000, 800), { left: 112, top: 116 });
+  assert.deepEqual(app.tipPosition(950, 780, 200, 50, 1000, 800), { left: 796, top: 714 });
+  assert.deepEqual(app.tipPosition(10, 10, 2000, 50, 1000, 800), { left: 4, top: 26 });
+});

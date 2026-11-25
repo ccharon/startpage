@@ -21,12 +21,14 @@ Then open `http://localhost:8765`. To use it as the browser start page, enter th
 Firefox *Settings > Home > Custom URLs* or Chrome *Settings > On startup > Open a specific page*.
 The log is in `journalctl --user -u startpage`.
 
-In the page, the search field has focus and filters by title, URL and tags. Enter opens the first
-match. Without a match, Enter opens the input as an address or searches the web. Bookmarks you open
-often rank higher among matches of similar quality. Categories are moved by dragging their title
-bar: the left or right edge of another category places them in the same row, the middle places them
-in a row above or below. Every change can be undone with the *Undo* button in its notice or with
-Ctrl+Z while the search field is empty.
+In the page, the search field has focus and filters by title, URL, tags and description. Enter opens
+the first match. Without a match, Enter opens the input as an address or searches the web. Bookmarks
+you open often rank higher among matches of similar quality. Categories are moved by dragging their
+title bar: the left or right edge of another category places them in the same row, the middle places
+them in a row above or below. Outside edit mode, resting the pointer on a bookmark for one second
+shows its title, URL and description. Bookmarks with a description have a small mark in the top
+right corner. Every change can be undone with the *Undo* button in its notice or with Ctrl+Z while
+the search field is empty.
 
 A bookmarklet adds the page you are viewing, and the browser address bar can search the bookmarks.
 Setup and behavior are described in [docs/browser-integration.md](docs/browser-integration.md).

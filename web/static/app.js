@@ -1,6 +1,6 @@
 'use strict';
 /* Local bookmark start page, vanilla JS single page app.
- * Sections: pure helpers & search · import logic · state · API · render · search (UI)
+ * Sections: pure helpers & search · import logic · state · API · render · tooltip · search (UI)
  *           · drag & drop · modals · import/export (UI) · theme · init
  */
 (function () {
@@ -144,6 +144,7 @@
             tags: Array.isArray(b.tags) ? b.tags.filter(t => typeof t === 'string') : [],
             order: Number.isFinite(b.order) ? b.order : 0
           };
+          if (typeof b.description === 'string' && b.description) o.description = b.description;
           // The server omits zero counters, so they are only kept when set.
           if (Number.isInteger(b.visits) && b.visits > 0) o.visits = b.visits;
           if (Number.isInteger(b.lastVisit) && b.lastVisit > 0) o.lastVisit = b.lastVisit;
@@ -246,7 +247,8 @@
           t: bm.title.toLowerCase(),
           u: bm.url.toLowerCase(),
           h: u ? u.hostname.toLowerCase().replace(/^www\./, '') : '',
-          g: bm.tags.map(x => x.toLowerCase())
+          g: bm.tags.map(x => x.toLowerCase()),
+          d: (bm.description || '').toLowerCase()
         });
       }
     }
@@ -305,6 +307,11 @@
       const hi = it.h.indexOf(term);
       if (hi >= 0) best = Math.max(best, isBoundary(it.h, hi) ? 600 : 550);
       else if (it.u.includes(term)) best = Math.max(best, 500);
+    }
+    // Below STRONG_MATCH: a description match alone never opens a bookmark directly.
+    if (best < 450 && it.d) {
+      const di = it.d.indexOf(term);
+      if (di >= 0) best = Math.max(best, isBoundary(it.d, di) ? 450 : 400);
     }
     if (best < 0) {
       let f = fuzzyMatch(term, it.t);
@@ -372,14 +379,32 @@
     return mask;
   }
 
+  // Tooltip position next to the pointer, flipped and clamped to stay inside the viewport.
+  function tipPosition(x, y, w, h, vw, vh) {
+    const gap = 16;
+    let left = x + 12;
+    let top = y + gap;
+    if (left + w > vw - 4) left = vw - 4 - w;
+    if (top + h > vh - 4) top = y - gap - h;
+    return { left: Math.max(4, left), top: Math.max(4, top) };
+  }
+
   // ------------------------- Import logic ----------------------------
 
   const MAX_TITLE = 500;
+  const MAX_DESC = 2000;
 
   function cleanTitle(title, url) {
     let t = String(title || '').replace(/\s+/g, ' ').trim();
     if (!t) { const u = safeUrl(url); t = u ? u.hostname : url; }
     return t.slice(0, MAX_TITLE);
+  }
+
+  // Keeps line breaks, collapses other whitespace and blank line runs.
+  function cleanDescription(text) {
+    return String(text || '').replace(/\r\n?/g, '\n').split('\n')
+      .map(l => l.replace(/\s+/g, ' ').trim()).join('\n')
+      .replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_DESC);
   }
 
   // Own JSON format -> {categories:[{name, bookmarks:[{title,url,tags}]}], skipped}
@@ -403,7 +428,8 @@
         const url = typeof b.url === 'string' ? (safeUrl(b.url.trim()) || {}).href : null;
         if (!url) { skipped++; continue; }
         const tags = Array.isArray(b.tags) ? parseTags(b.tags.filter(t => typeof t === 'string').join(',')) : [];
-        cat.bookmarks.push({ title: cleanTitle(typeof b.title === 'string' ? b.title : '', url), url, tags });
+        const description = cleanDescription(typeof b.description === 'string' ? b.description : '');
+        cat.bookmarks.push({ title: cleanTitle(typeof b.title === 'string' ? b.title : '', url), url, tags, description });
       }
       cats.push(cat);
     }
@@ -427,7 +453,9 @@
         const key = urlKey(b.url);
         if (seen.has(key)) { stats.duplicates++; continue; }
         seen.add(key);
-        cat.bookmarks.push({ id: uuid(), title: b.title, url: b.url, tags: (b.tags || []).slice(), order: cat.bookmarks.length });
+        const nb = { id: uuid(), title: b.title, url: b.url, tags: (b.tags || []).slice(), order: cat.bookmarks.length };
+        if (b.description) nb.description = b.description;
+        cat.bookmarks.push(nb);
         stats.added++;
       }
     }
@@ -439,11 +467,23 @@
     let p = dl.previousElementSibling;
     while (p && p.tagName === 'P') p = p.previousElementSibling;
     if (p && p.tagName === 'H3') return p;
-    const parent = dl.parentElement;
+    let parent = dl.parentElement;
+    // A folder description puts the folder's <DL> inside the <DD> after its <DT>.
+    if (parent && parent.tagName === 'DD') parent = parent.previousElementSibling;
     if (parent && parent.tagName === 'DT') {
       for (const ch of parent.children) if (ch.tagName === 'H3') return ch;
     }
     return null;
+  }
+
+  // Netscape files put a description in the <DD> following the bookmark's <DT>.
+  function netscapeDescription(a) {
+    const dt = a.parentElement;
+    const dd = dt && dt.tagName === 'DT' ? dt.nextElementSibling : null;
+    if (!dd || dd.tagName !== 'DD') return '';
+    let text = '';
+    for (const n of dd.childNodes) if (n.nodeType === 3 || (n.nodeType === 1 && n.tagName !== 'DL')) text += n.textContent;
+    return cleanDescription(text);
   }
 
   // Netscape-Bookmark-HTML (Edge/Chrome/Firefox) -> {categories, skipped}
@@ -464,7 +504,7 @@
       const name = names.length ? names.join(' / ') : 'Imported';
       if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), { name, bookmarks: [] });
       const tags = parseTags(a.getAttribute('tags') || '');
-      map.get(name.toLowerCase()).bookmarks.push({ title: cleanTitle(a.textContent, u.href), url: u.href, tags });
+      map.get(name.toLowerCase()).bookmarks.push({ title: cleanTitle(a.textContent, u.href), url: u.href, tags, description: netscapeDescription(a) });
     }
     return { categories: Array.from(map.values()).filter(c => c.bookmarks.length), skipped };
   }
@@ -473,7 +513,7 @@
     safeUrl, normalizeUrlInput, parseTags, hashHue, initials, uuid, normalizeData, renumber,
     moveBookmark, moveCategory, categoryRows, removeCategory, buildIndex, splitTerms, fuzzyMatch, termScore, search,
     highlightMask, parseOwnJson, parseNetscape, applyImport, urlKey, looksLikeUrl, urlFromInput,
-    fallbackTarget, isValidSearchTemplate, searchUrl, usageBonus, STRONG_MATCH, cleanTitle
+    fallbackTarget, isValidSearchTemplate, searchUrl, usageBonus, STRONG_MATCH, cleanTitle, cleanDescription, tipPosition
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = pure;
   if (typeof document === 'undefined') return;
@@ -770,6 +810,7 @@
   // ===================================================================
 
   function render() {
+    hideTip();
     updateChrome();
     renderCategories();
     renderSearchView();
@@ -897,9 +938,9 @@
     return panel;
   }
 
-  // Link to a bookmark; href only for http/https.
-  function bookmarkLink(cls, u, title) {
-    const a = el('a', { class: cls, title, draggable: 'false' });
+  // Link to a bookmark; href only for http/https. Details appear in the custom tooltip.
+  function bookmarkLink(cls, u, bm) {
+    const a = el('a', { class: cls, draggable: 'false', 'aria-description': bm.description || null });
     if (u) {
       a.href = u.href;
       a.target = '_blank';
@@ -913,6 +954,11 @@
     return a;
   }
 
+  // Returned as a list so that Element.append can take it spread.
+  function descMark(bm) {
+    return bm.description ? [el('span', { class: 'desc-mark', 'aria-hidden': 'true' })] : [];
+  }
+
   function itemActions(bm) {
     return el('span', { class: 'item-actions edit-only' },
       el('button', { type: 'button', class: 'tb-btn', 'data-action': 'edit-bm', title: 'Edit', 'aria-label': 'Edit: ' + bm.title }, '✎'),
@@ -924,8 +970,8 @@
     const tile = el('div', {
       class: 'item tile', 'data-bm-id': bm.id, 'data-cat-id': cat.id, draggable: state.readOnly ? false : 'true'
     });
-    const a = bookmarkLink('tile-link', u, bm.title + '\n' + bm.url);
-    a.append(favicon(bm.title, u), el('span', { class: 'tile-title' }, bm.title));
+    const a = bookmarkLink('tile-link', u, bm);
+    a.append(favicon(bm.title, u), el('span', { class: 'tile-title' }, bm.title), ...descMark(bm));
     tile.append(a);
     if (!state.readOnly) tile.append(itemActions(bm));
     return tile;
@@ -941,13 +987,14 @@
       role: inCategory ? 'listitem' : null,
       draggable: inCategory && !state.readOnly ? 'true' : false
     });
-    const a = bookmarkLink('row-link' + (opts.showCat ? ' with-cat' : ''), u, bm.title + '\n' + bm.url);
+    const a = bookmarkLink('row-link' + (opts.showCat ? ' with-cat' : ''), u, bm);
     const titleCell = el('span', { class: 'r-title' }, opts.terms ? highlighted(bm.title, opts.terms) : bm.title);
     for (const t of bm.tags) titleCell.append(el('span', { class: 'tag' }, t));
     a.append(
       el('span', { class: 'r-icon' }, favicon(bm.title, u)),
       titleCell,
-      el('span', { class: 'r-url mono' }, bm.url));
+      el('span', { class: 'r-url mono' }, bm.url),
+      ...descMark(bm));
     if (opts.showCat) a.append(el('span', { class: 'r-cat' }, cat.name));
     row.append(a);
     if ((inCategory || opts.editable) && !state.readOnly) row.append(itemActions(bm));
@@ -1008,6 +1055,56 @@
     list.replaceChildren(frag);
     syncSelection(false);
     updateStatus();
+  }
+
+  // ===================================================================
+  // Tooltip
+  // ===================================================================
+
+  // Shown after the pointer rests on a bookmark outside edit mode.
+  const TIP_DELAY = 1000;
+  const TIP_JITTER = 3;
+  const tip = { el: null, link: null, timer: 0, x: 0, y: 0 };
+
+  function hideTip() {
+    clearTimeout(tip.timer);
+    tip.timer = 0;
+    tip.link = null;
+    if (tip.el) tip.el.hidden = true;
+  }
+
+  function tipBookmark(link) {
+    const item = link.closest('[data-bm-id]');
+    return item ? findBm(findCat(state.data, item.dataset.catId), item.dataset.bmId) : null;
+  }
+
+  function showTip() {
+    tip.timer = 0;
+    const link = tip.link;
+    const bm = link && link.isConnected && !state.editMode ? tipBookmark(link) : null;
+    if (!bm) return;
+    if (!tip.el) { tip.el = el('div', { class: 'tooltip', role: 'tooltip', hidden: true }); document.body.append(tip.el); }
+    tip.el.replaceChildren(
+      el('div', { class: 'tip-title' }, bm.title),
+      el('div', { class: 'tip-url mono' }, bm.url),
+      bm.description ? el('div', { class: 'tip-desc' }, bm.description) : null);
+    tip.el.hidden = false;
+    const r = tip.el.getBoundingClientRect();
+    const p = tipPosition(tip.x, tip.y, r.width, r.height, window.innerWidth, window.innerHeight);
+    tip.el.style.left = p.left + 'px';
+    tip.el.style.top = p.top + 'px';
+  }
+
+  function onTipMove(e) {
+    const link = state.editMode || !e.target.closest ? null : e.target.closest('a.tile-link, a.row-link');
+    if (!link) { if (tip.link) hideTip(); return; }
+    const shown = tip.el && !tip.el.hidden;
+    if (link === tip.link && (shown || Math.abs(e.clientX - tip.x) + Math.abs(e.clientY - tip.y) <= TIP_JITTER)) return;
+    hideTip();
+    tip.link = link;
+    tip.x = e.clientX;
+    tip.y = e.clientY;
+    tip.timer = setTimeout(showTip, TIP_DELAY);
   }
 
   // ===================================================================
@@ -1368,6 +1465,10 @@
     const fTitle = el('input', { type: 'text', class: 'field', maxlength: MAX_TITLE, autocomplete: 'off' });
     const fUrl = el('input', { type: 'text', class: 'field mono', inputmode: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://…' });
     const fTags = el('input', { type: 'text', class: 'field', autocomplete: 'off', placeholder: 'e.g. work, ticket' });
+    const fDesc = el('textarea', { class: 'field', rows: 3, maxlength: MAX_DESC });
+    fDesc.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); fDesc.form.requestSubmit(); }
+    });
     const fCat = el('select', { class: 'field' });
     if (cats.length) {
       for (const c of cats) fCat.append(el('option', { value: c.id }, c.name));
@@ -1375,7 +1476,7 @@
     } else {
       fCat.append(el('option', { value: '__new__' }, 'General (new)'));
     }
-    if (bm) { fTitle.value = bm.title; fUrl.value = bm.url; fTags.value = bm.tags.join(', '); }
+    if (bm) { fTitle.value = bm.title; fUrl.value = bm.url; fTags.value = bm.tags.join(', '); fDesc.value = bm.description || ''; }
     else if (prefill) { fTitle.value = prefill.title; fUrl.value = prefill.url; }
     let dupConfirmed = null;
     fUrl.addEventListener('blur', () => {
@@ -1384,7 +1485,7 @@
 
     const value = await showDialog({
       title: bm ? 'Edit bookmark' : 'New bookmark',
-      body: [formRow('Title', fTitle), formRow('URL', fUrl, 'Without a scheme, https:// is added.'), formRow('Tags', fTags, 'Comma-separated'), formRow('Category', fCat)],
+      body: [formRow('Title', fTitle), formRow('URL', fUrl, 'Without a scheme, https:// is added.'), formRow('Tags', fTags, 'Comma-separated'), formRow('Description', fDesc, 'Shown when the pointer rests on the bookmark.'), formRow('Category', fCat)],
       initialFocus: bm || prefill ? fTitle : fUrl,
       buttons: [{ label: 'OK', submit: true, primary: true }, { label: 'Cancel', value: null }],
       onSubmit: () => {
@@ -1396,7 +1497,7 @@
           return { error: 'This URL is already saved as “' + dup.bm.title + '” in “' + dup.cat.name + '”. Press OK again to save it anyway.', field: fUrl };
         }
         const title = fTitle.value.replace(/\s+/g, ' ').trim() || safeUrl(url).hostname.replace(/^www\./, '');
-        return { value: { title, url, tags: parseTags(fTags.value), catId: fCat.value } };
+        return { value: { title, url, tags: parseTags(fTags.value), description: cleanDescription(fDesc.value), catId: fCat.value } };
       }
     });
     if (!value) return;
@@ -1412,12 +1513,15 @@
         const cur = findBm(src, bm.id);
         if (!cur) return false;
         cur.title = value.title; cur.url = value.url; cur.tags = value.tags;
+        if (value.description) cur.description = value.description; else delete cur.description;
         if (src.id !== target.id) {
           src.bookmarks.splice(src.bookmarks.indexOf(cur), 1);
           target.bookmarks.push(cur);
         }
       } else {
-        target.bookmarks.push({ id: uuid(), title: value.title, url: value.url, tags: value.tags, order: target.bookmarks.length });
+        const nb = { id: uuid(), title: value.title, url: value.url, tags: value.tags, order: target.bookmarks.length };
+        if (value.description) nb.description = value.description;
+        target.bookmarks.push(nb);
       }
       return true;
     }, bm ? 'Bookmark saved' : 'Bookmark created');
@@ -1792,7 +1896,12 @@
 
     $('btn-add-bookmark').addEventListener('click', () => openBookmarkDialog(null, null));
     $('btn-add-category').addEventListener('click', () => openCategoryDialog(null));
-    $('btn-edit').addEventListener('click', () => { state.editMode = !state.editMode; updateChrome(); });
+    $('btn-edit').addEventListener('click', () => { state.editMode = !state.editMode; hideTip(); updateChrome(); });
+    document.addEventListener('mousemove', onTipMove, { passive: true });
+    for (const ev of ['mousedown', 'keydown', 'dragstart', 'wheel']) document.addEventListener(ev, hideTip, { capture: true, passive: true });
+    window.addEventListener('scroll', hideTip, { capture: true, passive: true });
+    window.addEventListener('blur', hideTip);
+    document.documentElement.addEventListener('mouseleave', hideTip);
     $('btn-import').addEventListener('click', () => { if (canWrite()) $('file-input').click(); });
     $('btn-export').addEventListener('click', exportJson);
     $('btn-options').addEventListener('click', openOptionsDialog);

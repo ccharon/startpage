@@ -68,6 +68,8 @@ for pull requests.
 - The page reads `?add=<url>&title=<title>` (bookmarklet: prefills the bookmark dialog, saves only
   after OK) and `?q=<terms>` (address bar search: opens the best match directly if every term has a
   substring, tag or host match). Both parameters are removed from the address with `replaceState`.
+- Bookmarks carry an optional `description` (max. 2000 characters, line breaks allowed). The search
+  matches it below title, tag, host and URL matches, so it never triggers the direct open of `?q=`.
 - Bookmarks carry optional `visits` and `lastVisit` (Unix seconds). The search adds a usage bonus
   that is capped below the gap between substring and fuzzy scores.
 

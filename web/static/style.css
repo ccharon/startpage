@@ -167,6 +167,7 @@ h2 { font-size: inherit; margin: 0; font-weight: normal; }
 .field.mono { font-family: "Courier New", Courier, monospace; font-size: 1.083rem; }
 .field:focus-visible, .field:focus { outline: 1px dotted var(--fg); outline-offset: -4px; }
 select.field { padding: 0.167rem 0.333rem; }
+textarea.field { resize: vertical; display: block; }
 .field::placeholder { color: var(--muted); opacity: 0.8; }
 
 /* --- Front Panel ------------------------------------------------------ */
@@ -616,4 +617,42 @@ mark { background: var(--mark-bg); color: var(--mark-fg); padding: 0; }
   .row-link, .row-link.with-cat { grid-template-columns: 1.667rem minmax(0, 1fr) minmax(0, 1fr); }
   .r-cat { display: none; }
   .tile-grid { grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); }
+}
+
+/* --- Tooltip ---------------------------------------------------------- */
+
+.tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: min(28rem, calc(100vw - 8px));
+  padding: 0.333rem 0.5rem;
+  background: var(--field);
+  color: var(--fg);
+  border: 1px solid var(--win-lo);
+  box-shadow: 2px 2px 0 var(--backdrop);
+  pointer-events: none;
+}
+.tooltip[hidden] { display: none; }
+.tip-title { font-weight: bold; overflow-wrap: anywhere; }
+.tip-url { color: var(--muted); font-size: 0.917rem; overflow-wrap: anywhere; }
+.tip-desc {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--win-lo);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Corner mark on bookmarks with a description. */
+.tile-link, .row-link { position: relative; }
+.desc-mark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 6px 6px 0;
+  border-color: transparent var(--muted) transparent transparent;
+  pointer-events: none;
 }

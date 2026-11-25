@@ -183,19 +183,20 @@ func TestNoBackupsWhenZero(t *testing.T) {
 
 func TestValidation(t *testing.T) {
 	cases := map[string]string{
-		"javascript url": `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"javascript:alert(1)","tags":[],"order":0}]}]}`,
-		"data url":       `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"data:text/html,x","tags":[],"order":0}]}]}`,
-		"no host":        `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"http:///x","tags":[],"order":0}]}]}`,
-		"dup cat id":     `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[]},{"id":"c","name":"m","order":1,"bookmarks":[]}]}`,
-		"dup bm id":      `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"https://a.b","order":0}]},{"id":"d","name":"m","order":1,"bookmarks":[{"id":"b","title":"t","url":"https://a.b","order":0}]}]}`,
-		"bad version":    `{"version":2,"categories":[]}`,
-		"empty name":     `{"version":1,"categories":[{"id":"c","name":"  ","order":0,"bookmarks":[]}]}`,
-		"empty title":    `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"","url":"https://a.b","order":0}]}]}`,
-		"empty id":       `{"version":1,"categories":[{"id":"","name":"n","order":0,"bookmarks":[]}]}`,
-		"unknown field":  `{"version":1,"categories":[],"extra":true}`,
-		"trailing data":  `{"version":1,"categories":[]} {}`,
-		"not json":       `nope`,
-		"long tag":       `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"https://a.b","tags":["` + strings.Repeat("x", 101) + `"],"order":0}]}]}`,
+		"javascript url":   `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"javascript:alert(1)","tags":[],"order":0}]}]}`,
+		"data url":         `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"data:text/html,x","tags":[],"order":0}]}]}`,
+		"no host":          `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"http:///x","tags":[],"order":0}]}]}`,
+		"dup cat id":       `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[]},{"id":"c","name":"m","order":1,"bookmarks":[]}]}`,
+		"dup bm id":        `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"https://a.b","order":0}]},{"id":"d","name":"m","order":1,"bookmarks":[{"id":"b","title":"t","url":"https://a.b","order":0}]}]}`,
+		"bad version":      `{"version":2,"categories":[]}`,
+		"empty name":       `{"version":1,"categories":[{"id":"c","name":"  ","order":0,"bookmarks":[]}]}`,
+		"empty title":      `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"","url":"https://a.b","order":0}]}]}`,
+		"empty id":         `{"version":1,"categories":[{"id":"","name":"n","order":0,"bookmarks":[]}]}`,
+		"unknown field":    `{"version":1,"categories":[],"extra":true}`,
+		"trailing data":    `{"version":1,"categories":[]} {}`,
+		"not json":         `nope`,
+		"long tag":         `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"https://a.b","tags":["` + strings.Repeat("x", 101) + `"],"order":0}]}]}`,
+		"long description": `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[{"id":"b","title":"t","url":"https://a.b","description":"` + strings.Repeat("ä", 2001) + `","tags":[],"order":0}]}]}`,
 	}
 	for name, doc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -339,5 +340,25 @@ func TestValidationUsage(t *testing.T) {
 	var ve *ValidationError
 	if _, _, err := parseAndValidate([]byte(bad)); !errors.As(err, &ve) {
 		t.Fatalf("negative visits accepted: %v", err)
+	}
+}
+
+func TestValidationDescription(t *testing.T) {
+	doc := `{"version":1,"categories":[{"id":"c","name":"n","order":0,"bookmarks":[` +
+		`{"id":"a","title":"t","url":"https://x.org","description":"Line one\nLine two","tags":[],"order":0},` +
+		`{"id":"b","title":"t","url":"https://y.org","tags":[],"order":1}]}]}`
+	out, d, err := parseAndValidate([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Categories[0].Bookmarks[0].Description != "Line one\nLine two" {
+		t.Fatalf("description lost: %q", d.Categories[0].Bookmarks[0].Description)
+	}
+	if strings.Count(string(out), `"description"`) != 1 {
+		t.Fatalf("empty description should be omitted: %s", out)
+	}
+	max := strings.Replace(doc, `Line one\nLine two`, strings.Repeat("ä", 2000), 1)
+	if _, _, err := parseAndValidate([]byte(max)); err != nil {
+		t.Fatalf("description at the limit rejected: %v", err)
 	}
 }
