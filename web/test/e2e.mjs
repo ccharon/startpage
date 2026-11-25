@@ -116,6 +116,12 @@ async function run() {
   check('the tooltip shows title, URL and description after the delay', shown.includes('Jira') && shown.includes('/jira') && shown.includes('Team tickets'), shown);
   await hover([5, 5]);
   check('the tooltip hides when the pointer leaves', (await ev(tipText)) === '');
+  const plainCenter = await ev(`(() => { const r = document.querySelector('.tile[data-bm-id="b2"] .tile-title').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+  await hover(plainCenter);
+  await sleep(1400);
+  const plain = await ev(`(() => { const t = document.querySelector('.tooltip'); return t && !t.hidden ? [t.children.length, t.textContent] : null; })()`);
+  check('a tooltip without description shows only title and URL', !!plain && plain[0] === 2 && !plain[1].includes('null'), JSON.stringify(plain));
+  await hover([5, 5]);
   await ev(`document.querySelector('#btn-edit').click()`);
   await hover(tileCenter);
   await sleep(1400);

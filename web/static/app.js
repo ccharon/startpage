@@ -1084,10 +1084,10 @@
     const bm = link && link.isConnected && !state.editMode ? tipBookmark(link) : null;
     if (!bm) return;
     if (!tip.el) { tip.el = el('div', { class: 'tooltip', role: 'tooltip', hidden: true }); document.body.append(tip.el); }
-    tip.el.replaceChildren(
-      el('div', { class: 'tip-title' }, bm.title),
-      el('div', { class: 'tip-url mono' }, bm.url),
-      bm.description ? el('div', { class: 'tip-desc' }, bm.description) : null);
+    // replaceChildren turns null into the text "null", so only pass existing nodes.
+    const parts = [el('div', { class: 'tip-title' }, bm.title), el('div', { class: 'tip-url mono' }, bm.url)];
+    if (bm.description) parts.push(el('div', { class: 'tip-desc' }, bm.description));
+    tip.el.replaceChildren(...parts);
     tip.el.hidden = false;
     const r = tip.el.getBoundingClientRect();
     const p = tipPosition(tip.x, tip.y, r.width, r.height, window.innerWidth, window.innerHeight);
